@@ -27,8 +27,7 @@ def _pip_repository_impl(rctx):
 
     args = [
         python_interpreter,
-        "-m",
-        "python.pip_install.extract_wheels",
+        rctx.path(rctx.attr._extractor),
         "--requirements",
         rctx.path(rctx.attr.requirements),
         "--repo",
@@ -103,6 +102,19 @@ python_interpreter.
             default = 600,
             doc = "Timeout (in seconds) on the rule's execution duration.",
         ),
+        "_extractor": attr.label(
+            executable = True,
+            default = Label("@rules_python//python/pip_install/extract_wheels:__main__.py"),
+            allow_single_file = True,
+            cfg = "host",
+        ),
+        # NOTE: Not executed, but referenced so that changes in file cause re-execution of implementation function.
+        # See: https://docs.bazel.build/versions/master/skylark/repository_rules.html#when-is-the-implementation-function-executed
+        # Particularly, "for non-local repositories, only a change in the following dependencies might cause a restart ... Content of any file used and referred to by a label"
+        "_extractor_lib": attr.label(
+            executable = False,
+            default = Label("@rules_python//python/pip_install/extract_wheels:__init__.py"),
+        )
     },
     implementation = _pip_repository_impl,
     doc = """A rule for importing `requirements.txt` dependencies into Bazel.
