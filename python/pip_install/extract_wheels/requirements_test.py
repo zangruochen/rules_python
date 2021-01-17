@@ -1,6 +1,6 @@
 import unittest
 
-from python.pip_install.extract_wheels.lib import requirements
+from python.pip_install.extract_wheels import parse_requirement_for_extra
 
 
 class TestRequirementExtrasParsing(unittest.TestCase):
@@ -24,7 +24,7 @@ class TestRequirementExtrasParsing(unittest.TestCase):
         for case, expected in cases:
             with self.subTest():
                 self.assertTupleEqual(
-                    requirements._parse_requirement_for_extra(case), expected
+                    parse_requirement_for_extra(case), expected
                 )
 
 

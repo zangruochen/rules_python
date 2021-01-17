@@ -4,7 +4,7 @@ import tempfile
 from typing import Optional
 import unittest
 
-from python.pip_install.extract_wheels.lib import namespace_pkgs
+from python.pip_install.extract_wheels import implicit_namespace_packages
 
 
 class TempDir:
@@ -44,7 +44,7 @@ class TestImplicitNamespacePackages(unittest.TestCase):
             directory.root() + "/foo/bar",
             directory.root() + "/foo/bee",
         }
-        actual = namespace_pkgs.implicit_namespace_packages(directory.root())
+        actual = implicit_namespace_packages(directory.root())
         self.assertEqual(actual, expected)
 
     def test_ignores_empty_directories(self) -> None:
@@ -56,7 +56,7 @@ class TestImplicitNamespacePackages(unittest.TestCase):
             directory.root() + "/foo",
             directory.root() + "/foo/bar",
         }
-        actual = namespace_pkgs.implicit_namespace_packages(directory.root())
+        actual = implicit_namespace_packages(directory.root())
         self.assertEqual(actual, expected)
 
     def test_empty_case(self) -> None:
@@ -65,7 +65,7 @@ class TestImplicitNamespacePackages(unittest.TestCase):
         directory.add_file("foo/bar/__init__.py")
         directory.add_file("foo/bar/biz.py")
 
-        actual = namespace_pkgs.implicit_namespace_packages(directory.root())
+        actual = implicit_namespace_packages(directory.root())
         self.assertEqual(actual, set())
 
 

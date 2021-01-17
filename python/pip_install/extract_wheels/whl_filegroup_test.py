@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from python.pip_install.extract_wheels.lib import bazel
+from python.pip_install.extract_wheels import extract_wheel
 
 
 class TestExtractWheel(unittest.TestCase):
@@ -9,7 +9,7 @@ class TestExtractWheel(unittest.TestCase):
         wheel_name = "example_minimal_package-0.0.1-py3-none-any.whl"
         wheel_dir = "experimental/examples/wheel/"
         wheel_path = wheel_dir + wheel_name
-        generated_bazel_dir = bazel.extract_wheel(
+        generated_bazel_dir = extract_wheel(
             wheel_path,
             extras={},
             pip_data_exclude=[],

@@ -1,11 +1,11 @@
 import unittest
 
-from python.pip_install.extract_wheels.lib import bazel
+from python.pip_install.extract_wheels import generate_requirements_file_contents
 
 
 class TestGenerateRequirementsFileContents(unittest.TestCase):
     def test_all_wheel_requirements(self) -> None:
-        contents = bazel.generate_requirements_file_contents(
+        contents = generate_requirements_file_contents(
             repo_name='test',
             targets=['"@test//pypi__pkg1"', '"@test//pypi__pkg2"'],
         )
