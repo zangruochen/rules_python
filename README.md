@@ -29,7 +29,7 @@ changes as they evolve.
 This repository is maintained by the Bazel community. Neither Google, nor the
 Bazel team, provides support for the code. However, this repository is part of
 the test suite used to vet new Bazel releases. See the [How to
-contribute](CONTRIBUTING.md) page for information on our development workflow.
+contribute](https://github.com/bazelbuild/rules_python/blob/main/CONTRIBUTING.md) page for information on our development workflow.
 
 ## Getting started
 
@@ -83,7 +83,8 @@ You may also find some quirks while using this toolchain. Please refer to [pytho
 
 ### Toolchain usage in other rules
 
-Python toolchains can be utilised in other bazel rules, such as `genrule()`, by adding the `toolchains=["@rules_python//python:current_py_toolchain"]` attribute. The path to the python interpreter can be obtained by using the `$(PYTHON2)` and `$(PYTHON3)` ["Make" Variables](https://bazel.build/reference/be/make-variables). See the [`test_current_py_toolchain`](tests/load_from_macro/BUILD.bazel) target for an example.
+Python toolchains can be utilised in other bazel rules, such as `genrule()`, by adding the `toolchains=["@rules_python//python:current_py_toolchain"]` attribute. The path to the python interpreter can be obtained by using the `$(PYTHON2)` and `$(PYTHON3)` ["Make" Variables](https://bazel.build/reference/be/make-variables). See the [`test_current_py_toolchain`](https://github.com/bazelbuild/rules_python/blob/main/tests/load_from_macro/BUILD.bazel) target for an example.
+
 
 
 ### "Hello World"
