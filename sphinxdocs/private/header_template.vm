@@ -1,3 +1,6 @@
+---
+display_vcs_links: false
+---
 # %%BZL_LOAD_PATH%%
 
 $moduleDocstring
