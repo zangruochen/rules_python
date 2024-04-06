@@ -210,7 +210,6 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
 
         # Construct args separately so that the lock file can be smaller and does not include unused
         # attrs.
-        repo_name = "{}_{}".format(pip_name, whl_name)
         whl_library_args = dict(
             repo = pip_name,
             dep_template = "@{}//{{name}}:{{target}}".format(hub_name),
@@ -299,6 +298,16 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
 
         # We sort so that the lock-file remains the same no matter the order of how the
         # args are manipulated in the code going before.
+        if pip_attr.experimental_index_url and whl_library_args.get("filename"):
+            filename = whl_library_args.get("filename")
+            if filename.endswith(".whl"):
+                parsed = parse_whl_name(filename)
+
+                repo_name = "{}_{}__{}".format(pip_name, whl_name, parsed.platform_tag.replace(".", "_"))
+            else:
+                repo_name = "{}_{}__sdist".format(pip_name, whl_name)
+        else:
+            repo_name = "{}_{}".format(pip_name, whl_name)
         whl_library(name = repo_name, **dict(sorted(whl_library_args.items())))
         whl_map[hub_name].setdefault(whl_name, []).append(
             whl_alias(

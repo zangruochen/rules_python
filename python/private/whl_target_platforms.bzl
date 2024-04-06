@@ -18,21 +18,6 @@ A starlark implementation of the wheel platform tag parsing to get the target pl
 
 load(":parse_whl_name.bzl", "parse_whl_name")
 
-# Taken from https://peps.python.org/pep-0600/
-_LEGACY_ALIASES = {
-    "manylinux1_i686": "manylinux_2_5_i686",
-    "manylinux1_x86_64": "manylinux_2_5_x86_64",
-    "manylinux2010_i686": "manylinux_2_12_i686",
-    "manylinux2010_x86_64": "manylinux_2_12_x86_64",
-    "manylinux2014_aarch64": "manylinux_2_17_aarch64",
-    "manylinux2014_armv7l": "manylinux_2_17_armv7l",
-    "manylinux2014_i686": "manylinux_2_17_i686",
-    "manylinux2014_ppc64": "manylinux_2_17_ppc64",
-    "manylinux2014_ppc64le": "manylinux_2_17_ppc64le",
-    "manylinux2014_s390x": "manylinux_2_17_s390x",
-    "manylinux2014_x86_64": "manylinux_2_17_x86_64",
-}
-
 # _translate_cpu and _translate_os from @platforms//host:extension.bzl
 def _translate_cpu(arch):
     if arch in ["i386", "i486", "i586", "i686", "i786", "x86"]:
@@ -174,9 +159,7 @@ def select_whl(*, whls, want_abis, want_os, want_cpu):
             # Filter out incompatible ABIs
             continue
 
-        platform_tags = list({_LEGACY_ALIASES.get(p, p): True for p in parsed.platform_tag.split(".")})
-
-        for tag in platform_tags:
+        for tag in parsed.platform_tag.split("."):
             candidates[tag] = whl
 
     # For most packages - if they supply 'any' wheel and there are no other
@@ -198,7 +181,6 @@ def select_whl(*, whls, want_abis, want_os, want_cpu):
             # Ignore musl wheels for now
             continue
 
-        platform_tag = ".".join({_LEGACY_ALIASES.get(p, p): True for p in platform_tag.split(".")})
         platforms = whl_target_platforms(platform_tag)
         for p in platforms:
             target_plats.setdefault("{}_{}".format(p.os, p.cpu), []).append(platform_tag)

@@ -42,11 +42,11 @@ def _test_with_build_tag(env):
 _tests.append(_test_with_build_tag)
 
 def _test_multiple_platforms(env):
-    got = parse_whl_name("bar-3.2.1-py3-abi3-manylinux1.manylinux2.whl")
+    got = parse_whl_name("bar-3.2.1-py3-abi3-manylinux1_x86_64.manylinux2014_x86_64.whl")
     env.expect.that_str(got.distribution).equals("bar")
     env.expect.that_str(got.version).equals("3.2.1")
     env.expect.that_str(got.abi_tag).equals("abi3")
-    env.expect.that_str(got.platform_tag).equals("manylinux1.manylinux2")
+    env.expect.that_str(got.platform_tag).equals("manylinux_2_5_x86_64.manylinux_2_17_x86_64")
     env.expect.that_str(got.python_tag).equals("py3")
     env.expect.that_str(got.build_tag).equals(None)
 
