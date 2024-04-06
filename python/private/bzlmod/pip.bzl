@@ -29,8 +29,9 @@ load("//python/private:normalize_name.bzl", "normalize_name")
 load("//python/private:parse_whl_name.bzl", "parse_whl_name")
 load("//python/private:pypi_index.bzl", "get_simpleapi_sources", "simpleapi_download")
 load("//python/private:render_pkg_aliases.bzl", "whl_alias")
+load("//python/private:text_util.bzl", "render")
 load("//python/private:version_label.bzl", "version_label")
-load("//python/private:whl_target_platforms.bzl", "select_whl")
+load("//python/private:whl_target_platforms.bzl", "select_whls", "whl_target_platforms")
 load(":pip_repository.bzl", "pip_repository")
 
 def _parse_version(version):
@@ -100,7 +101,7 @@ You cannot use both the additive_build_content and additive_build_content_file a
             whl_mods = whl_mods,
         )
 
-def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, simpleapi_cache):
+def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, simpleapi_cache, hub_config_settings):
     python_interpreter_target = pip_attr.python_interpreter_target
 
     # if we do not have the python_interpreter set in the attributes
@@ -126,6 +127,7 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
         version_label(pip_attr.python_version),
     )
     major_minor = _major_minor_version(pip_attr.python_version)
+    is_default = major_minor == _major_minor_version(DEFAULT_PYTHON_VERSION)
 
     requirements_lock = locked_requirements_label(module_ctx, pip_attr)
 
@@ -243,11 +245,10 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
         )
         whl_library_args.update({k: v for k, (v, default) in maybe_args_with_default.items() if v == default})
 
+        whls = []
+        sdist = None
+        srcs = get_simpleapi_sources(requirement_line)
         if index_urls:
-            srcs = get_simpleapi_sources(requirement_line)
-
-            whls = []
-            sdist = None
             for sha256 in srcs.shas:
                 # For now if the artifact is marked as yanked we just ignore it.
                 #
@@ -265,7 +266,21 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
 
                 print("WARNING: Could not find a whl or an sdist with sha256={}".format(sha256))  # buildifier: disable=print
 
-            distribution = select_whl(
+        # We sort so that the lock-file remains the same no matter the order of how the
+        # args are manipulated in the code going before.
+        if whls or sdist:
+            # pip is not used to download wheels and the python `whl_library` helpers are only extracting things
+            whl_library_args.pop("extra_pip_args", None)
+
+            # This is no-op because pip is not used to download the wheel.
+            whl_library_args.pop("download_only", None)
+
+            if pip_attr.netrc:
+                whl_library_args["netrc"] = pip_attr.netrc
+            if pip_attr.auth_patterns:
+                whl_library_args["auth_patterns"] = pip_attr.auth_patterns
+
+            whls = select_whls(
                 whls = whls,
                 want_abis = [
                     "none",
@@ -274,49 +289,129 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
                     # Older python versions have wheels for the `*m` ABI.
                     "cp" + major_minor.replace(".", "") + "m",
                 ],
-                want_os = module_ctx.os.name,
-                want_cpu = module_ctx.os.arch,
-            ) or sdist
+            )
 
-            if distribution:
+            config_settings = {}
+
+            # TODO @aignas 2024-04-06: use experimental_target_platforms
+            for whl in whls:
                 whl_library_args["requirement"] = srcs.requirement
-                whl_library_args["urls"] = [distribution.url]
-                whl_library_args["sha256"] = distribution.sha256
-                whl_library_args["filename"] = distribution.filename
-                if pip_attr.netrc:
-                    whl_library_args["netrc"] = pip_attr.netrc
-                if pip_attr.auth_patterns:
-                    whl_library_args["auth_patterns"] = pip_attr.auth_patterns
+                whl_library_args["urls"] = [whl.url]
+                whl_library_args["sha256"] = whl.sha256
+                whl_library_args["filename"] = whl.filename
 
-                # pip is not used to download wheels and the python `whl_library` helpers are only extracting things
-                whl_library_args.pop("extra_pip_args", None)
+                parsed = parse_whl_name(whl.filename)
+                repo_name = "{}_{}__{}".format(pip_name, whl_name, parsed.platform_tag.replace(".", "_"))
+                whl_library(name = repo_name, **dict(sorted(whl_library_args.items())))
 
-                # This is no-op because pip is not used to download the wheel.
-                whl_library_args.pop("download_only", None)
-            else:
+                if parsed.platform_tag == "any":
+                    is_python = "is_python_{}".format(major_minor)
+                    flag_values = {
+                        str(Label("//python/config_settings:sdist")): "auto",
+                    }
+                    config_settings["//:" + is_python] = repo_name
+                    hub_config_settings[is_python] = render.is_python_config_setting(
+                        name = is_python,
+                        flag_values = flag_values,
+                        python_version = major_minor,
+                        visibility = ["//:__subpackages__"],
+                    )
+                    if is_default:
+                        is_python = "is_any"
+                        config_settings["//:" + is_python] = repo_name
+                        hub_config_settings[is_python] = render.config_setting(
+                            name = is_python,
+                            flag_values = flag_values,
+                            visibility = ["//:__subpackages__"],
+                        )
+                    continue
+
+                for plat in whl_target_platforms(parsed.platform_tag):
+                    constraint_values = [
+                        "@platforms//os:" + plat.os,
+                        "@platforms//cpu:" + plat.cpu,
+                    ]
+                    flavor = ""
+                    flag_values = {
+                        str(Label("//python/config_settings:sdist")): "auto",
+                    }
+                    if "linux" == plat.os:
+                        flavor = "musl" if "musl" in parsed.platform_tag else "glibc"
+                        flag_values[str(Label("//python/config_settings:whl_linux_libc"))] = flavor
+                    elif "osx" == plat.os and "universal" in parsed.platform_tag:
+                        flavor = "multiarch"
+                        flag_values[str(Label("//python/config_settings:whl_osx"))] = flavor
+
+                    if flavor:
+                        plat_label = "is_{}_{}".format(plat.target_platform, flavor)
+                    else:
+                        plat_label = "is_{}".format(plat.target_platform)
+
+                    if is_default:
+                        config_settings["//:" + plat_label] = repo_name
+                        hub_config_settings[plat_label] = render.config_setting(
+                            name = plat_label,
+                            flag_values = flag_values,
+                            constraint_values = constraint_values,
+                            visibility = ["//:__subpackages__"],
+                        )
+
+                    plat_label = "is_python_" + major_minor + plat_label[len("is"):]
+                    config_settings["//:" + plat_label] = repo_name
+                    hub_config_settings[plat_label] = render.is_python_config_setting(
+                        name = plat_label,
+                        python_version = major_minor,
+                        flag_values = flag_values,
+                        constraint_values = constraint_values,
+                        visibility = ["//:__subpackages__"],
+                    )
+
+            whl_library_args["requirement"] = srcs.requirement
+            whl_library_args["urls"] = [sdist.url]
+            whl_library_args["sha256"] = sdist.sha256
+            whl_library_args["filename"] = sdist.filename
+
+            repo_name = "{}_{}__sdist".format(pip_name, whl_name)
+
+            # TODO @aignas 2024-04-06: If the resultant whl from the sdist is
+            # platform specific, we would get into trouble. I think we should
+            # ensure that we set `target_compatible_with` for the py_library if
+            # that is the case.
+            whl_library(name = repo_name, **dict(sorted(whl_library_args.items())))
+
+            is_python = "is_python_{}".format(major_minor)
+            hub_config_settings[is_python] = render.is_python_config_setting(
+                name = is_python,
+                python_version = major_minor,
+                visibility = ["//:__subpackages__"],
+            )
+            config_settings["//:" + is_python] = repo_name
+            if is_default:
+                config_settings["//conditions:default"] = repo_name
+
+            for config_setting, repo_name in config_settings.items():
+                whl_map[hub_name].setdefault(whl_name, []).append(
+                    whl_alias(
+                        repo = repo_name,
+                        version = major_minor,
+                        config_setting = config_setting,
+                    ),
+                )
+        else:
+            if index_urls:
                 print("WARNING: falling back to pip for installing the right file for {}".format(requirement_line))  # buildifier: disable=print
 
-        # We sort so that the lock-file remains the same no matter the order of how the
-        # args are manipulated in the code going before.
-        if pip_attr.experimental_index_url and whl_library_args.get("filename"):
-            filename = whl_library_args.get("filename")
-            if filename.endswith(".whl"):
-                parsed = parse_whl_name(filename)
-
-                repo_name = "{}_{}__{}".format(pip_name, whl_name, parsed.platform_tag.replace(".", "_"))
-            else:
-                repo_name = "{}_{}__sdist".format(pip_name, whl_name)
-        else:
             repo_name = "{}_{}".format(pip_name, whl_name)
-        whl_library(name = repo_name, **dict(sorted(whl_library_args.items())))
-        whl_map[hub_name].setdefault(whl_name, []).append(
-            whl_alias(
-                repo = repo_name,
-                version = major_minor,
-                # Call Label() to canonicalize because its used in a different context
-                config_setting = Label("//python/config_settings:is_python_" + major_minor),
-            ),
-        )
+
+            whl_library(name = repo_name, **dict(sorted(whl_library_args.items())))
+            whl_map[hub_name].setdefault(whl_name, []).append(
+                whl_alias(
+                    repo = repo_name,
+                    version = major_minor,
+                    # Call Label() to canonicalize because its used in a different context
+                    config_setting = Label("//python/config_settings:is_python_" + major_minor),
+                ),
+            )
 
 def _pip_impl(module_ctx):
     """Implementation of a class tag that creates the pip hub and corresponding pip spoke whl repositories.
@@ -425,6 +520,7 @@ def _pip_impl(module_ctx):
     # Where hub, whl, and pip are the repo names
     hub_whl_map = {}
     hub_group_map = {}
+    hub_config_settings = {}
 
     simpleapi_cache = {}
 
@@ -463,7 +559,7 @@ def _pip_impl(module_ctx):
             else:
                 pip_hub_map[pip_attr.hub_name].python_versions.append(pip_attr.python_version)
 
-            _create_whl_repos(module_ctx, pip_attr, hub_whl_map, whl_overrides, hub_group_map, simpleapi_cache)
+            _create_whl_repos(module_ctx, pip_attr, hub_whl_map, whl_overrides, hub_group_map, simpleapi_cache, hub_config_settings.setdefault(hub_name, {}))
 
     for hub_name, whl_map in hub_whl_map.items():
         pip_repository(
@@ -473,8 +569,9 @@ def _pip_impl(module_ctx):
                 key: json.encode(value)
                 for key, value in whl_map.items()
             },
-            default_version = _major_minor_version(DEFAULT_PYTHON_VERSION),
+            default_config_setting = "//conditions:default",
             groups = hub_group_map.get(hub_name),
+            config_settings = list(hub_config_settings[hub_name].values()),
         )
 
 def _pip_parse_ext_attrs():

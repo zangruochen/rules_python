@@ -80,10 +80,37 @@ def _render_list(items):
         "]",
     ])
 
+def _config_setting(name, **kwargs):
+    return "\n".join([
+        "config_setting(",
+        _indent("\n".join([
+            "name = \"{}\",".format(name),
+        ] + [
+            "{} = {},".format(k, repr(v))
+            for k, v in kwargs.items()
+        ])),
+        ")",
+    ])
+
+def _is_python_config_setting(name, *, python_version, **kwargs):
+    return "\n".join([
+        "is_python_config_setting(",
+        _indent("\n".join([
+            "name = \"{}\",".format(name),
+            "python_version = \"{}\",".format(python_version),
+        ] + [
+            "{} = {},".format(k, repr(v))
+            for k, v in kwargs.items()
+        ])),
+        ")",
+    ])
+
 render = struct(
     alias = _render_alias,
     dict = _render_dict,
     indent = _indent,
     list = _render_list,
     select = _render_select,
+    config_setting = _config_setting,
+    is_python_config_setting = _is_python_config_setting,
 )

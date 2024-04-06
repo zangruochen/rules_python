@@ -18,39 +18,6 @@ A starlark implementation of the wheel platform tag parsing to get the target pl
 
 load(":parse_whl_name.bzl", "parse_whl_name")
 
-# _translate_cpu and _translate_os from @platforms//host:extension.bzl
-def _translate_cpu(arch):
-    if arch in ["i386", "i486", "i586", "i686", "i786", "x86"]:
-        return "x86_32"
-    if arch in ["amd64", "x86_64", "x64"]:
-        return "x86_64"
-    if arch in ["ppc", "ppc64", "ppc64le"]:
-        return "ppc"
-    if arch in ["arm", "armv7l"]:
-        return "arm"
-    if arch in ["aarch64"]:
-        return "aarch64"
-    if arch in ["s390x", "s390"]:
-        return "s390x"
-    if arch in ["mips64el", "mips64"]:
-        return "mips64"
-    if arch in ["riscv64"]:
-        return "riscv64"
-    return None
-
-def _translate_os(os):
-    if os.startswith("mac os"):
-        return "osx"
-    if os.startswith("freebsd"):
-        return "freebsd"
-    if os.startswith("openbsd"):
-        return "openbsd"
-    if os.startswith("linux"):
-        return "linux"
-    if os.startswith("windows"):
-        return "windows"
-    return None
-
 # The order of the dictionaries is to keep definitions with their aliases next to each
 # other
 _CPU_ALIASES = {
@@ -78,72 +45,12 @@ _OS_PREFIXES = {
     "win": "windows",
 }  # buildifier: disable=unsorted-dict-items
 
-def _whl_priority(value):
-    """Return a value for sorting whl lists.
-
-    TODO @aignas 2024-03-29: In the future we should create a repo for each
-    repo that matches the abi and then we could have config flags for the
-    preference of `any` wheels or `sdist` or `manylinux` vs `musllinux` or
-    `universal2`. Ideally we use `select` statements in the hub repo to do
-    the selection based on the config, but for now this is the best way to
-    get this working for the host platform.
-
-    In the future the right thing would be to have `bool_flag` or something
-    similar to be able to have select statements that does the right thing:
-    * select whls vs sdists.
-    * select manylinux vs musllinux
-    * select universal2 vs arch-specific whls
-
-    All of these can be expressed as configuration settings and included in the
-    select statements in the `whl` repo. This means that the user can configure
-    for a particular target what they need.
-
-    Returns a 4-tuple where the items are:
-        * bool - is it an 'any' wheel? True if it is.
-        * bool - is it an 'universal' wheel? True if it is. (e.g. macos universal2 wheels)
-        * int - the minor plaform version (e.g. osx os version, libc version)
-        * int - the major plaform version (e.g. osx os version, libc version)
-    """
-    if "." in value:
-        value, _, _ = value.partition(".")
-
-    if "any" == value:
-        # This is just a big value that should be larger than any other value returned by this function
-        return (True, False, 0, 0)
-
-    if "linux" in value:
-        os, _, tail = value.partition("_")
-        if os == "linux":
-            # If the platform tag starts with 'linux', then return something less than what 'any' returns
-            minor = 0
-            major = 0
-        else:
-            major, _, tail = tail.partition("_")  # We don't need to use that because it's the same for all candidates now
-            minor, _, _ = tail.partition("_")
-
-        return (False, os == "linux", int(minor), int(major))
-
-    if "mac" in value or "osx" in value:
-        _, _, tail = value.partition("_")
-        major, _, tail = tail.partition("_")
-        minor, _, _ = tail.partition("_")
-
-        return (False, "universal2" in value, int(minor), int(major))
-
-    if not "win" in value:
-        fail("BUG: only windows, linux and mac platforms are supported, but got: {}".format(value))
-
-    # Windows does not have multiple wheels for the same target platform
-    return (False, False, 0, 0)
-
-def select_whl(*, whls, want_abis, want_os, want_cpu):
+def select_whls(*, whls, want_abis):
     """Select a suitable wheel from a list.
 
     Args:
         whls(list[struct]): A list of candidates.
         want_abis(list[str]): A list of ABIs that are supported.
-        want_os(str): The module_ctx.os.name.
-        want_cpu(str): The module_ctx.os.arch.
 
     Returns:
         None or a struct with `url`, `sha256` and `filename` attributes for the
@@ -152,53 +59,16 @@ def select_whl(*, whls, want_abis, want_os, want_cpu):
     if not whls:
         return None
 
-    candidates = {}
+    candidates = []
     for whl in whls:
         parsed = parse_whl_name(whl.filename)
         if parsed.abi_tag not in want_abis:
             # Filter out incompatible ABIs
             continue
 
-        for tag in parsed.platform_tag.split("."):
-            candidates[tag] = whl
+        candidates.append(whl)
 
-    # For most packages - if they supply 'any' wheel and there are no other
-    # compatible wheels with the selected abis, we can just return the value.
-    if len(candidates) == 1 and "any" in candidates:
-        return struct(
-            url = candidates["any"].url,
-            sha256 = candidates["any"].sha256,
-            filename = candidates["any"].filename,
-        )
-
-    target_plats = {}
-    has_any = "any" in candidates
-    for platform_tag, whl in candidates.items():
-        if platform_tag == "any":
-            continue
-
-        if "musl" in platform_tag:
-            # Ignore musl wheels for now
-            continue
-
-        platforms = whl_target_platforms(platform_tag)
-        for p in platforms:
-            target_plats.setdefault("{}_{}".format(p.os, p.cpu), []).append(platform_tag)
-
-    for p, platform_tags in target_plats.items():
-        if has_any:
-            platform_tags.append("any")
-
-        target_plats[p] = sorted(platform_tags, key = _whl_priority)
-
-    want = target_plats.get("{}_{}".format(
-        _translate_os(want_os),
-        _translate_cpu(want_cpu),
-    ))
-    if not want:
-        return want
-
-    return candidates[want[0]]
+    return candidates
 
 def whl_target_platforms(platform_tag, abi_tag = ""):
     """Parse the wheel abi and platform tags and return (os, cpu) tuples.

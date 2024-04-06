@@ -37,7 +37,7 @@ No matching wheel for current configuration's Python version.
 
 The current build configuration's Python version doesn't match any of the Python
 versions available for this wheel. This wheel supports the following Python versions:
-    {supported_versions}
+    {config_settings}
 
 As matched by the `@{rules_python}//python/config_settings:is_python_<version>`
 configuration settings.
@@ -54,7 +54,7 @@ which has a "null" version value and will not match version constraints.
 def _render_whl_library_alias(
         *,
         name,
-        default_version,
+        default_config_setting,
         aliases,
         target_name,
         **kwargs):
@@ -81,7 +81,7 @@ def _render_whl_library_alias(
         # hub repo
         actual = "@{repo}//:{name}".format(repo = alias.repo, name = target_name)
         selects[alias.config_setting] = actual
-        if alias.version == default_version:
+        if alias.config_setting == default_config_setting:
             default = actual
             no_match_error = None
 
@@ -91,26 +91,26 @@ def _render_whl_library_alias(
     return render.alias(
         name = name,
         actual = render.select(
-            selects,
+            dict(sorted(selects.items())),
             no_match_error = no_match_error,
         ),
         **kwargs
     )
 
-def _render_common_aliases(*, name, aliases, default_version = None, group_name = None):
+def _render_common_aliases(*, name, aliases, default_config_setting = None, group_name = None):
     lines = [
         """package(default_visibility = ["//visibility:public"])""",
     ]
 
-    versions = None
+    config_settings = None
     if aliases:
-        versions = sorted([v.version for v in aliases if v.version])
+        config_settings = sorted([v.config_setting for v in aliases if v.config_setting])
 
-    if not versions or default_version in versions:
+    if not config_settings or default_config_setting in config_settings:
         pass
     else:
         error_msg = NO_MATCH_ERROR_MESSAGE_TEMPLATE.format(
-            supported_versions = ", ".join(versions),
+            config_settings = ", ".join(config_settings),
             rules_python = "rules_python",
         )
 
@@ -119,8 +119,8 @@ def _render_common_aliases(*, name, aliases, default_version = None, group_name 
         ))
 
         # This is to simplify the code in _render_whl_library_alias and to ensure
-        # that we don't pass a 'default_version' that is not in 'versions'.
-        default_version = None
+        # that we don't pass a 'default_config_setting' that is not in 'config_settings'.
+        default_config_setting = None
 
     lines.append(
         render.alias(
@@ -132,7 +132,7 @@ def _render_common_aliases(*, name, aliases, default_version = None, group_name 
         [
             _render_whl_library_alias(
                 name = name,
-                default_version = default_version,
+                default_config_setting = default_config_setting,
                 aliases = aliases,
                 target_name = target_name,
                 visibility = ["//_groups:__subpackages__"] if name.startswith("_") else None,
@@ -161,7 +161,7 @@ def _render_common_aliases(*, name, aliases, default_version = None, group_name 
 
     return "\n\n".join(lines)
 
-def render_pkg_aliases(*, aliases, default_version = None, requirement_cycles = None):
+def render_pkg_aliases(*, aliases, default_config_setting = None, requirement_cycles = None):
     """Create alias declarations for each PyPI package.
 
     The aliases should be appended to the pip_repository BUILD.bazel file. These aliases
@@ -171,7 +171,7 @@ def render_pkg_aliases(*, aliases, default_version = None, requirement_cycles = 
     Args:
         aliases: dict, the keys are normalized distribution names and values are the
             whl_alias instances.
-        default_version: the default version to be used for the aliases.
+        default_config_setting: the default version to be used for the aliases.
         requirement_cycles: any package groups to also add.
 
     Returns:
@@ -200,7 +200,7 @@ def render_pkg_aliases(*, aliases, default_version = None, requirement_cycles = 
         "{}/BUILD.bazel".format(normalize_name(name)): _render_common_aliases(
             name = normalize_name(name),
             aliases = pkg_aliases,
-            default_version = default_version,
+            default_config_setting = default_config_setting,
             group_name = whl_group_mapping.get(normalize_name(name)),
         ).strip()
         for name, pkg_aliases in aliases.items()

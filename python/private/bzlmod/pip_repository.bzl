@@ -31,7 +31,7 @@ def _pip_repository_impl(rctx):
             key: [whl_alias(**v) for v in json.decode(values)]
             for key, values in rctx.attr.whl_map.items()
         },
-        default_version = rctx.attr.default_version,
+        default_config_setting = rctx.attr.default_config_setting,
         requirement_cycles = rctx.attr.groups,
     )
     for path, contents in aliases.items():
@@ -43,7 +43,18 @@ def _pip_repository_impl(rctx):
     # `requirement`, et al. macros.
     macro_tmpl = "@@{name}//{{}}:{{}}".format(name = rctx.attr.name)
 
-    rctx.file("BUILD.bazel", _BUILD_FILE_CONTENTS)
+    loads = {}
+    for config_setting in rctx.attr.config_settings:
+        if config_setting.startswith("is_python_config_setting"):
+            rules_python, _, _ = str(Label("//:unused")).partition("//")
+            loads["""load("{}//python/config_settings:config_settings.bzl", "is_python_config_setting")""".format(rules_python)] = None
+
+    rctx.file("BUILD.bazel", "\n\n".join(
+        [
+            "\n".join(sorted(loads)),
+            _BUILD_FILE_CONTENTS,
+        ] + rctx.attr.config_settings,
+    ))
     rctx.template("requirements.bzl", rctx.attr._template, substitutions = {
         "%%ALL_DATA_REQUIREMENTS%%": render.list([
             macro_tmpl.format(p, "data")
@@ -62,7 +73,8 @@ def _pip_repository_impl(rctx):
     })
 
 pip_repository_attrs = {
-    "default_version": attr.string(
+    "config_settings": attr.string_list(mandatory = True),
+    "default_config_setting": attr.string(
         mandatory = True,
         doc = """\
 This is the default python version in the format of X.Y. This should match
