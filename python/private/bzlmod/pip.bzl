@@ -380,9 +380,9 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
             whl_library(name = repo_name, **dict(sorted(whl_library_args.items())))
 
             is_python = "is_python_{}".format(major_minor)
-            hub_config_settings[is_python] = render.is_python_config_setting(
+            hub_config_settings[is_python] = render.alias(
                 name = is_python,
-                python_version = major_minor,
+                actual = repr(str(Label("//python/config_settings:is_python_" + major_minor))),
                 visibility = ["//:__subpackages__"],
             )
             config_settings["//:" + is_python] = repo_name
