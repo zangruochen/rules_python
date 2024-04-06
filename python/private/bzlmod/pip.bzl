@@ -289,6 +289,11 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
                     # Older python versions have wheels for the `*m` ABI.
                     "cp" + major_minor.replace(".", "") + "m",
                 ],
+                # TODO @aignas 2024-04-07: filter the wheels based on the target
+                # platforms that we are selecting. We should not register
+                # whl_libraries twice if the user is calling `pip.parse` with different
+                # requirement_lock files and different experimental_target_platforms.
+                # want_platforms = pip_attr.experimental_target_platforms,
             )
 
             config_settings = {}
@@ -301,7 +306,16 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
                 whl_library_args["filename"] = whl.filename
 
                 parsed = parse_whl_name(whl.filename)
-                repo_name = "{}_{}__{}".format(pip_name, whl_name, parsed.platform_tag.replace(".", "_"))
+
+                # ideally, we could reuse the same library across multiple versions, but
+                # it is hard. The reason is that different python_versions may be using
+                # different packages and this could be the case even for .
+                repo_name = "{}_{}_{}_{}".format(
+                    pip_name,
+                    whl_name,
+                    parsed.version.replace(".", "_"),
+                    parsed.platform_tag.partition(".")[0],
+                )
                 whl_library(name = repo_name, **dict(sorted(whl_library_args.items())))
 
                 if parsed.platform_tag == "any":
