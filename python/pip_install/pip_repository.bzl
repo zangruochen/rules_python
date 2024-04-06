@@ -423,6 +423,13 @@ common_env = [
 ]
 
 common_attrs = {
+    "dep_template": attr.string(
+        doc = """
+The dep template to use for referencing the dependencies. It should have `{name}`
+and `{target}` tokens that will be replaced with the normalized distribution name
+and the target that we need respectively.
+""",
+    ),
     "download_only": attr.bool(
         doc = """
 Whether to use "pip download" instead of "pip wheel". Disables building wheels from source, but allows use of
@@ -595,6 +602,8 @@ python_interpreter. An example value: "@python3_x86_64-unknown-linux-gnu//:pytho
     "repo_prefix": attr.string(
         doc = """
 Prefix for the generated packages will be of the form `@<prefix><sanitized-package-name>//...`
+
+DEPRECATED. Only left for people who vendor requirements.bzl.
 """,
     ),
     # 600 is documented as default here: https://docs.bazel.build/versions/master/skylark/lib/repository_ctx.html#execute
@@ -886,7 +895,7 @@ def _whl_library_impl(rctx):
         entry_points[entry_point_without_py] = entry_point_script_name
 
     build_file_contents = generate_whl_library_build_bazel(
-        repo_prefix = rctx.attr.repo_prefix,
+        dep_template = rctx.attr.dep_template or "@{}_{{name}}//:{{target}}".format(rctx.attr.repo_prefix),
         whl_name = whl_path.basename,
         dependencies = metadata["deps"],
         dependencies_by_platform = metadata["deps_by_platform"],
