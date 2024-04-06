@@ -196,7 +196,7 @@ def construct_config_settings(name = None):  # buildifier: disable=function-docs
     )
 
     string_flag(
-        name = "sdist",
+        name = "use_sdist",
         build_setting_default = "auto",
         values = ["auto", "only"],
         visibility = ["//visibility:public"],

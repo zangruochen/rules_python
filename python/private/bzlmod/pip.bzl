@@ -270,7 +270,7 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
         # args are manipulated in the code going before.
         if whls or sdist:
             # pip is not used to download wheels and the python `whl_library` helpers are only extracting things
-            whl_library_args.pop("extra_pip_args", None)
+            extra_pip_args = whl_library_args.pop("extra_pip_args", None)
 
             # This is no-op because pip is not used to download the wheel.
             whl_library_args.pop("download_only", None)
@@ -307,7 +307,7 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
                 if parsed.platform_tag == "any":
                     is_python = "is_python_{}".format(major_minor)
                     flag_values = {
-                        str(Label("//python/config_settings:sdist")): "auto",
+                        str(Label("//python/config_settings:use_sdist")): "auto",
                     }
                     config_settings["//:" + is_python] = repo_name
                     hub_config_settings[is_python] = render.is_python_config_setting(
@@ -333,7 +333,7 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
                     ]
                     flavor = ""
                     flag_values = {
-                        str(Label("//python/config_settings:sdist")): "auto",
+                        str(Label("//python/config_settings:use_sdist")): "auto",
                     }
                     if "linux" == plat.os:
                         flavor = "musl" if "musl" in parsed.platform_tag else "glibc"
@@ -366,37 +366,42 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
                         visibility = ["//:__subpackages__"],
                     )
 
-            whl_library_args["requirement"] = srcs.requirement
-            whl_library_args["urls"] = [sdist.url]
-            whl_library_args["sha256"] = sdist.sha256
-            whl_library_args["filename"] = sdist.filename
+            if sdist:
+                if extra_pip_args:
+                    # Add the args back for when we are building a wheel
+                    whl_library_args["extra_pip_args"] = extra_pip_args
 
-            repo_name = "{}_{}__sdist".format(pip_name, whl_name)
+                whl_library_args["requirement"] = srcs.requirement
+                whl_library_args["urls"] = [sdist.url]
+                whl_library_args["sha256"] = sdist.sha256
+                whl_library_args["filename"] = sdist.filename
 
-            # TODO @aignas 2024-04-06: If the resultant whl from the sdist is
-            # platform specific, we would get into trouble. I think we should
-            # ensure that we set `target_compatible_with` for the py_library if
-            # that is the case.
-            whl_library(name = repo_name, **dict(sorted(whl_library_args.items())))
+                repo_name = "{}_{}__sdist".format(pip_name, whl_name)
 
-            is_python = "is_python_{}".format(major_minor)
-            hub_config_settings[is_python] = render.alias(
-                name = is_python,
-                actual = repr(str(Label("//python/config_settings:is_python_" + major_minor))),
-                visibility = ["//:__subpackages__"],
-            )
-            config_settings["//:" + is_python] = repo_name
-            if is_default:
-                config_settings["//conditions:default"] = repo_name
+                # TODO @aignas 2024-04-06: If the resultant whl from the sdist is
+                # platform specific, we would get into trouble. I think we should
+                # ensure that we set `target_compatible_with` for the py_library if
+                # that is the case.
+                whl_library(name = repo_name, **dict(sorted(whl_library_args.items())))
 
-            for config_setting, repo_name in config_settings.items():
-                whl_map[hub_name].setdefault(whl_name, []).append(
-                    whl_alias(
-                        repo = repo_name,
-                        version = major_minor,
-                        config_setting = config_setting,
-                    ),
+                is_python = "is_python_{}".format(major_minor)
+                hub_config_settings[is_python] = render.alias(
+                    name = is_python,
+                    actual = repr(str(Label("//python/config_settings:is_python_" + major_minor))),
+                    visibility = ["//:__subpackages__"],
                 )
+                config_settings["//:" + is_python] = repo_name
+                if is_default:
+                    config_settings["//conditions:default"] = repo_name
+
+                for config_setting, repo_name in config_settings.items():
+                    whl_map[hub_name].setdefault(whl_name, []).append(
+                        whl_alias(
+                            repo = repo_name,
+                            version = major_minor,
+                            config_setting = config_setting,
+                        ),
+                    )
         else:
             if index_urls:
                 print("WARNING: falling back to pip for installing the right file for {}".format(requirement_line))  # buildifier: disable=print
