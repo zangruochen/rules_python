@@ -59,11 +59,23 @@ register_toolchains("@pythons_hub//:all")
 pip = use_extension("//python/extensions:pip.bzl", "pip")
 pip.parse(
     experimental_index_url = "https://pypi.org/simple",
+    experimental_requirements_by_platform = {
+        # TODO @aignas 2024-04-07: Require the values to the dict to be without "*"
+        # TODO @aignas 2024-04-07: consider not requiring python_version and using cp3x notation for the target platforms
+        "//tools/publish:requirements.txt": ",".join([
+            "linux_aarch64",
+            "linux_ppc",
+            "linux_s390x",
+            "linux_x86_64",
+        ]),
+        "//tools/publish:requirements_darwin.txt": ",".join([
+            "osx_aarch64",
+            "osx_x86_64",
+        ]),
+        "//tools/publish:requirements_windows.txt": "windows_x86_64",
+    },
     hub_name = "rules_python_publish_deps",
     python_version = "3.11",
-    requirements_darwin = "//tools/publish:requirements_darwin.txt",
-    requirements_lock = "//tools/publish:requirements.txt",
-    requirements_windows = "//tools/publish:requirements_windows.txt",
 )
 use_repo(pip, "rules_python_publish_deps")
 

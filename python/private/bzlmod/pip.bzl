@@ -129,26 +129,17 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
     major_minor = _major_minor_version(pip_attr.python_version)
     is_default = major_minor == _major_minor_version(DEFAULT_PYTHON_VERSION)
 
-    requirements_lock = locked_requirements_label(module_ctx, pip_attr)
-
-    # Parse the requirements file directly in starlark to get the information
-    # needed for the whl_libary declarations below.
-    requirements_lock_content = module_ctx.read(requirements_lock)
-    parse_result = parse_requirements(requirements_lock_content)
-
-    # Replicate a surprising behavior that WORKSPACE builds allowed:
-    # Defining a repo with the same name multiple times, but only the last
-    # definition is respected.
-    # The requirement lines might have duplicate names because lines for extras
-    # are returned as just the base package name. e.g., `foo[bar]` results
-    # in an entry like `("foo", "foo[bar] == 1.0 ...")`.
-    requirements = {
-        normalize_name(entry[0]): entry
-        # The WORKSPACE pip_parse sorted entries, so mimic that ordering.
-        for entry in sorted(parse_result.requirements)
-    }.values()
-
-    extra_pip_args = pip_attr.extra_pip_args + parse_result.options
+    requirements_lock_content = {
+        key: module_ctx.read(file)
+        for key, file in ({
+            "host": locked_requirements_label(module_ctx, pip_attr),
+        } | {
+            p.strip(): file
+            for file, key in pip_attr.experimental_requirements_by_platform.items()
+            for p in key.split(",")
+        }).items()
+        if file
+    }
 
     if hub_name not in whl_map:
         whl_map[hub_name] = {}
@@ -190,7 +181,7 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
                 index_url = pip_attr.experimental_index_url,
                 extra_index_urls = pip_attr.experimental_extra_index_urls or [],
                 index_url_overrides = pip_attr.experimental_index_url_overrides or {},
-                sources = [requirements_lock_content],
+                sources = requirements_lock_content.values(),
                 envsubst = pip_attr.envsubst,
                 # Auth related info
                 netrc = pip_attr.netrc,
@@ -200,7 +191,65 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
         )
 
     # Create a new wheel library for each of the different whls
-    for whl_name, requirement_line in requirements:
+
+    # Parse the requirements file directly in starlark to get the information
+    # needed for the whl_libary declarations below.
+    parse_result = {
+        key: parse_requirements(value)
+        for key, value in requirements_lock_content.items()
+    }
+
+    extra_pip_args_by_plat = {
+        key: pip_attr.extra_pip_args + result.options
+        for key, result in parse_result.items()
+    }
+    extra_pip_args = None
+    for _, args in extra_pip_args_by_plat.items():
+        if extra_pip_args == None:
+            extra_pip_args = args
+        elif "".join(extra_pip_args) != "".join(args):
+            # buildifier: disable=print
+            print("WARNING: The extra pip args for each lock file must be the same, will use '{}'".format(extra_pip_args))
+
+    # Replicate a surprising behavior that WORKSPACE builds allowed:
+    # Defining a repo with the same name multiple times, but only the last
+    # definition is respected.
+    # The requirement lines might have duplicate names because lines for extras
+    # are returned as just the base package name. e.g., `foo[bar]` results
+    # in an entry like `("foo", "foo[bar] == 1.0 ...")`.
+    requirements = {
+        key: {
+            normalize_name(entry[0]): entry
+            # The WORKSPACE pip_parse sorted entries, so mimic that ordering.
+            for entry in sorted(result.requirements)
+        }.values()
+        for key, result in parse_result.items()
+    }
+
+    requirements_with_target_platforms = {}
+    for target_platform, reqs_ in requirements.items():
+        for whl_name, requirement_line in reqs_:
+            requirements_with_target_platforms.setdefault(whl_name, {}).setdefault(requirement_line, []).append(target_platform)
+
+    for whl_name, reqs in requirements_with_target_platforms.items():
+        if len(reqs) == 1:
+            requirement_line, target_platforms = reqs.items()[0]
+        else:
+            # buildifier: disable=print
+            print(
+                "Multiple reqs have been specified for the same wheel " +
+                "but different platforms:\n    " +
+                "\n    ".join([
+                    "{} for {}".format(k, v)
+                    for k, v in reqs.items()
+                ]),
+            )
+
+            # Set these to empty because we are using the multi-platform code paths
+            requirement_line = ""
+            target_platforms = None
+            continue
+
         # We are not using the "sanitized name" because the user
         # would need to guess what name we modified the whl name
         # to.
@@ -224,7 +273,7 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
             enable_implicit_namespace_pkgs = pip_attr.enable_implicit_namespace_pkgs,
             environment = pip_attr.environment,
             envsubst = pip_attr.envsubst,
-            experimental_target_platforms = pip_attr.experimental_target_platforms,
+            experimental_target_platforms = target_platforms,
             extra_pip_args = extra_pip_args,
             group_deps = group_deps,
             group_name = group_name,
@@ -270,7 +319,7 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
         # args are manipulated in the code going before.
         if whls or sdist:
             # pip is not used to download wheels and the python `whl_library` helpers are only extracting things
-            extra_pip_args = whl_library_args.pop("extra_pip_args", None)
+            whl_library_args.pop("extra_pip_args", None)
 
             # This is no-op because pip is not used to download the wheel.
             whl_library_args.pop("download_only", None)
@@ -636,6 +685,11 @@ https://pytorch.org/blog/compromised-nightly-dependency/.
 
 The indexes must support Simple API as described here:
 https://packaging.python.org/en/latest/specifications/simple-repository-api/
+""",
+        ),
+        "experimental_requirements_by_platform": attr.label_keyed_string_dict(
+            doc = """\
+The requirements files and the comma delimited list of target platforms.
 """,
         ),
         "hub_name": attr.string(
