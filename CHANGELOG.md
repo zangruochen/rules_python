@@ -67,6 +67,22 @@ A brief description of the categories of changes:
   downloader. If you see any issues, report in
   [#1357](https://github.com/bazelbuild/rules_python/issues/1357). The URLs for
   the whl and sdist files will be written to the lock file.
+* (bzlmod) When using `experimental_index_url` whls for all compatible platforms
+  will be added to the hub repository. With this come a few new experimental
+  `string_flags` that can be used to configure which targets are selected at
+  build time:
+    * @rules_python//python/config_settings:whl_linux_libc controls whether
+      `musllinux` or `manylinux` wheels are chosen. Chose one of `glibc` or
+      `musl` values in your `.bazelrc`.
+    * @rules_python//python/config_settings:whl_osx controls whether
+      `universal2` or the architecture specific wheels are used when targeting
+      OSX.
+    * @rules_python//python/config_settings:use_sdist controls whether `sdist`
+      targets should be selected.
+* (bzlmod) A new `experimental_requirements_by_platform` has been added which
+  allows the users to specify specific requirements files for different os_arch
+  combinations. This will require the user to use the `experimental_index_url`
+  feature for now.
 
 [0.XX.0]: https://github.com/bazelbuild/rules_python/releases/tag/0.XX.0
 [python_default_visibility]: gazelle/README.md#directive-python_default_visibility

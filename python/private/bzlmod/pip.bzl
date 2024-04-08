@@ -621,12 +621,12 @@ def _create_whl_repos(module_ctx, pip_attr, whl_map, whl_overrides, group_map, s
                         ),
                     )
         else:
+            # TODO @aignas 2024-04-08: use module_ctx.os.name in order to get
+            # the right requirement_line in this case.
+
             requirement_line = None  # TODO
             if index_urls:
                 print("WARNING: falling back to pip for installing the right file for {}".format(requirement_line))  # buildifier: disable=print
-
-            # TODO @aignas 2024-04-08: use module_ctx.os.name in order to get
-            # the right requirement_line in this case.
 
             repo_name = "{}_{}".format(pip_name, whl_name)
 
