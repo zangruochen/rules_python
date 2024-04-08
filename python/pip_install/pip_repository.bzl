@@ -290,7 +290,7 @@ def locked_requirements_label(ctx, attr):
         requirements_txt = attr.requirements_linux
     elif "win" in os and attr.requirements_windows != None:
         requirements_txt = attr.requirements_windows
-    if hasattr(attr, "experimental_requirements_by_platform"):
+    if getattr(attr, "experimental_requirements_by_platform"):
         if requirements_txt:
             fail("""You can either use the legacy platform-specific lockfiles or use the by-platform specification using 'experimental_requirements_by_platform' attribute""")
         else:
