@@ -45,12 +45,13 @@ _OS_PREFIXES = {
     "win": "windows",
 }  # buildifier: disable=unsorted-dict-items
 
-def select_whls(*, whls, want_abis):
-    """Select a suitable wheel from a list.
+def select_whls(*, whls, want_abis, want_platforms):
+    """Select a subset of wheels suitable for target platforms from a list.
 
     Args:
         whls(list[struct]): A list of candidates.
         want_abis(list[str]): A list of ABIs that are supported.
+        want_platforms(str): The platforms
 
     Returns:
         None or a struct with `url`, `sha256` and `filename` attributes for the
@@ -66,7 +67,18 @@ def select_whls(*, whls, want_abis):
             # Filter out incompatible ABIs
             continue
 
-        candidates.append(whl)
+        if parsed.platform_tag == "any" or not want_platforms:
+            candidates.append(whl)
+            continue
+
+        compatible = False
+        for p in whl_target_platforms(parsed.platform_tag):
+            if p.target_platform in want_platforms:
+                compatible = True
+                break
+
+        if compatible:
+            candidates.append(whl)
 
     return candidates
 
