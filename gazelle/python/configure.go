@@ -25,6 +25,7 @@ import (
 
 	"github.com/bazelbuild/bazel-gazelle/config"
 	"github.com/bazelbuild/bazel-gazelle/rule"
+	"github.com/bmatcuk/doublestar/v4"
 
 	"github.com/bazelbuild/rules_python/gazelle/manifest"
 	"github.com/bazelbuild/rules_python/gazelle/pythonconfig"
@@ -65,6 +66,7 @@ func (py *Configurer) KnownDirectives() []string {
 		pythonconfig.TestNamingConvention,
 		pythonconfig.DefaultVisibilty,
 		pythonconfig.Visibility,
+		pythonconfig.TestFilePattern,
 	}
 }
 
@@ -175,12 +177,24 @@ func (py *Configurer) Configure(c *config.Config, rel string, f *rule.File) {
 				config.SetDefaultVisibility([]string{defaultVisibility})
 			default:
 				// Handle injecting the python root. Assume that the user used the
-				// exact string "$python_root".
-				labels := strings.ReplaceAll(directiveArg, "$python_root", config.PythonProjectRoot())
+				// exact string "$python_root$".
+				labels := strings.ReplaceAll(directiveArg, "$python_root$", config.PythonProjectRoot())
 				config.SetDefaultVisibility(strings.Split(labels, ","))
 			}
 		case pythonconfig.Visibility:
 			config.AppendVisibility(strings.TrimSpace(d.Value))
+		case pythonconfig.TestFilePattern:
+			value := strings.TrimSpace(d.Value)
+			if value == "" {
+				log.Fatal("directive 'python_test_file_pattern' requires a value")
+			}
+			globStrings := strings.Split(value, ",")
+			for _, g := range globStrings {
+				if !doublestar.ValidatePattern(g) {
+					log.Fatalf("invalid glob pattern '%s'", g)
+				}
+			}
+			config.SetTestFilePattern(globStrings)
 		}
 	}
 

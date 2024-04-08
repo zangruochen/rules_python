@@ -38,8 +38,14 @@ A brief description of the categories of changes:
 * (whl_library) The group redirection is only added when the package is part of
   the group potentially fixing aspects that want to traverse a `py_library` graph.
   Fixes [#1760](https://github.com/bazelbuild/rules_python/issues/1760).
+* (bzlmod) Setting a particular micro version for the interpreter and the
+  `pip.parse` extension is now possible, see the
+  `examples/pip_parse/MODULE.bazel` for how to do it.
+  See [#1371](https://github.com/bazelbuild/rules_python/issues/1371).
 
 ### Added
+
+* (toolchains) Added armv7 platform definition for python toolchains.
 
 * New Python versions available: `3.11.8`, `3.12.2` using
   https://github.com/indygreg/python-build-standalone/releases/tag/20240224.
@@ -47,6 +53,10 @@ A brief description of the categories of changes:
   of generated targets by appending additional visibility labels.
 * (gazelle) Added a new `python_default_visibility` directive to control the
   _default_ visibility of generated targets. See the [docs][python_default_visibility]
+  for details.
+* (gazelle) Added a new `python_test_file_pattern` directive. This directive tells
+  gazelle which python files should be mapped to the `py_test` rule. See the
+  [original issue][test_file_pattern_issue] and the [docs][test_file_pattern_docs]
   for details.
 * (wheel) Add support for `data_files` attributes in py_wheel rule
   ([#1777](https://github.com/bazelbuild/rules_python/issues/1777))
@@ -60,6 +70,8 @@ A brief description of the categories of changes:
 
 [0.XX.0]: https://github.com/bazelbuild/rules_python/releases/tag/0.XX.0
 [python_default_visibility]: gazelle/README.md#directive-python_default_visibility
+[test_file_pattern_issue]: https://github.com/bazelbuild/rules_python/issues/1816
+[test_file_pattern_docs]: gazelle/README.md#directive-python_test_file_pattern
 
 ### Changed
 
