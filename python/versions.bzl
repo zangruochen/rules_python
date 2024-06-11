@@ -20,7 +20,7 @@ MACOS_NAME = "mac os"
 LINUX_NAME = "linux"
 WINDOWS_NAME = "windows"
 
-DEFAULT_RELEASE_BASE_URL = "https://github.com/indygreg/python-build-standalone/releases/download"
+DEFAULT_RELEASE_BASE_URL = "https://github.com/zangruochen/rules_python/releases/download/0.31.0/"
 
 # When updating the versions and releases, run the following command to get
 # the hashes:
@@ -294,6 +294,13 @@ TOOL_VERSIONS = {
         },
         "strip_prefix": "python",
     },
+    "3.10.14": {
+        "url": "python-3.10.14-loongarch64.tar.gz",
+        "sha256": {
+            "loongarch64-unknown-linux-gnu": "11f597a606f79f1eeaeb9d0a30d81d43117660767323e9e1f8eb7884c38e551a",
+        },
+        "strip_prefix": "python",
+    },
     "3.11.1": {
         "url": "20230116/cpython-{python_version}+20230116-{platform}-{build}.tar.gz",
         "sha256": {
@@ -401,7 +408,7 @@ TOOL_VERSIONS = {
 MINOR_MAPPING = {
     "3.8": "3.8.18",
     "3.9": "3.9.18",
-    "3.10": "3.10.13",
+    "3.10": "3.10.14",
     "3.11": "3.11.7",
     "3.12": "3.12.1",
 }
@@ -473,6 +480,14 @@ PLATFORMS = {
         ],
         os_name = LINUX_NAME,
         arch = "x86_64",
+    ),
+    "loongarch64-unknown-linux-gnu": struct(
+        compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:loongarch64",
+        ],
+        os_name = LINUX_NAME,
+        arch = "loongarch64",
     ),
 }
 
